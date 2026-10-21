@@ -1,27 +1,35 @@
 class MoviesController < ApplicationController
   before_action :set_movie, only: %i[ show edit update destroy ]
 
-  # GET /movies or /movies.json
   def index
     @all_ratings = Movie.all_ratings
 
     @ratings_to_show =
-      if params[:ratings_submitted].present?
-        params[:ratings]&.keys || []
+      if params.key?(:ratings_submitted) || params.key?(:ratings)
+        selected = params[:ratings]&.keys || []
+        selected.empty? ? @all_ratings : selected
       else
-        @all_ratings
+        session[:ratings] || @all_ratings
       end
 
-    @sort_by =
-      if %w[title release_date].include?(params[:sort_by])
-        params[:sort_by]
-      else
-        'title'
-      end
+    requested_sort = params[:sort_by] || session[:sort_by]
+    @sort_by = %w[title release_date].include?(requested_sort) ? requested_sort : 'title'
+
+    session[:ratings] = @ratings_to_show
+    session[:sort_by] = @sort_by
+
+    # Restore remembered settings in the URL when returning to the list.
+    unless params.key?(:sort_by) &&
+          (params.key?(:ratings_submitted) || params.key?(:ratings))
+      redirect_to movies_path(
+        sort_by: @sort_by,
+        ratings: @ratings_to_show.to_h { |rating| [rating, '1'] },
+        ratings_submitted: '1'
+      )
+      return
+    end
 
     @movies = Movie.with_ratings(@ratings_to_show).order(@sort_by => :asc)
-
-    @ratings_params = @ratings_to_show.to_h { |rating| [rating, '1'] }
   end
 
   
